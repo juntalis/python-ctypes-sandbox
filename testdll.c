@@ -10,48 +10,53 @@
 #include <stdio.h>
 #include <malloc.h>
 
-HMODULE GetCurrentModule()
-{ // NB: XP+ solution!
-	HMODULE hModule = NULL;
-	GetModuleHandleEx(
-		GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
-		(LPCTSTR)GetCurrentModule,
-		&hModule);
+static HANDLE hConsole = NULL;
+static LPCSTR msgParent = "\nSOURCE: ";
+static LPCSTR msgText = "\nMSGTXT: ";
 
-	return hModule;
+static void writeMessage(LPCSTR prefix, LPCSTR message)
+{
+	SIZE_T buffLen;
+	
+	// Verify hConsole
+	if(hConsole == NULL) {
+		if((hConsole = CreateFile("CONOUT$", GENERIC_WRITE | GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0L, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0L)
+		) == INVALID_HANDLE_VALUE) {
+			MessageBoxA(NULL, "Failed to get STDOUT!", "Error", MB_OK|MB_ICONERROR);
+		}
+	}
+	
+	// Write the first part of the line.
+	SetConsoleTextAttribute( hConsole, (WORD)((0 << 4) | 15));
+	buffLen = 9 * sizeof(const char);
+	WriteFile(hConsole, (LPCVOID)prefix, (DWORD)buffLen, NULL, NULL);
+	
+	// Write our message
+	SetConsoleTextAttribute( hConsole, (WORD)((0 << 4) | 10));
+	buffLen = (lstrlenA(message)) * sizeof(const char);
+	WriteFile(hConsole, (LPCVOID)message, (DWORD)buffLen, NULL, NULL);
+	
+	// Reset to default.
+	SetConsoleTextAttribute( hConsole, (WORD)((0 << 4) | 7));
+}
+
+void __declspec(dllexport) Finalize()
+{
+	char sModulePath[MAX_PATH + 1] = "";
+	GetModuleFileNameA(NULL, sModulePath, MAX_PATH);
+	writeMessage(msgParent, sModulePath);
+	writeMessage(msgText, "Goodbye World\n");
+}
+
+void __declspec(dllexport) Initialize()
+{
+	char sModulePath[MAX_PATH + 1] = "";
+	GetModuleFileNameA(NULL, sModulePath, MAX_PATH);
+	writeMessage(msgParent, sModulePath);
+	writeMessage(msgText, "Hello World\n");
 }
 
 BOOL WINAPI DllMain( HINSTANCE hInstance, DWORD dwReason, LPVOID lpReserved )
 {
-	BOOL bResult = FALSE;
-	HANDLE hConsole;
-	LPCSTR msgCommon = "PARENT: ",
-	msgAttach = "Hello World\n",
-	msgDetach = "Goodbye World\n";
-
-	SIZE_T buffLen;
-	AttachConsole((DWORD)-1);
-	if((hConsole = CreateFile("CONOUT$", GENERIC_WRITE | GENERIC_READ,
-		FILE_SHARE_READ | FILE_SHARE_WRITE,
-		0L, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0L)
-	) == INVALID_HANDLE_VALUE) {
-		MessageBoxA(NULL, "Failed to get STDOUT!", "Error", MB_OK|MB_ICONERROR);
-	}
-	
-	SetConsoleTextAttribute( hConsole, (WORD)((0 << 4) | 15));
-	buffLen = (lstrlenA(msgCommon)) * sizeof(const char);
-	WriteFile(hConsole, (LPCVOID)msgCommon, (DWORD)buffLen, NULL, NULL);
-	
-	SetConsoleTextAttribute( hConsole, (WORD)((0 << 4) | 10));
-	if (dwReason == DLL_PROCESS_ATTACH)
-	{
-		buffLen = (lstrlenA(msgAttach)) * sizeof(const char);
-		WriteFile(hConsole, (LPCVOID)msgAttach, (DWORD)buffLen, NULL, NULL);
-		SetConsoleTextAttribute( hConsole, (WORD)((0 << 4) | 7));
-	} else if (dwReason == DLL_PROCESS_DETACH) {
-		buffLen = (lstrlenA(msgDetach)) * sizeof(const char);
-		WriteFile(hConsole, (LPCVOID)msgDetach, (DWORD)buffLen, NULL, NULL);
-		SetConsoleTextAttribute( hConsole, (WORD)((0 << 4) | 7));
-	}
-	return bResult;
+	return TRUE;
 }

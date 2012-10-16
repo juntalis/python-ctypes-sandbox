@@ -1,21 +1,7 @@
 from ctypes import *
+from ctypes.wintypes import *
 
-from ctypes.wintypes import WCHAR
-from ctypes.wintypes import LONG
-from ctypes.wintypes import HANDLE
-from ctypes.wintypes import LPVOID
-from ctypes.wintypes import LPCVOID
-from ctypes.wintypes import BOOL
-from ctypes.wintypes import WORD
-from ctypes.wintypes import DWORD
-from ctypes.wintypes import LPCSTR
-from ctypes.wintypes import LPSTR
-from ctypes.wintypes import HINSTANCE
-from ctypes.wintypes import HMODULE
-_stdcall_libraries = {}
-_stdcall_libraries['kernel32.dll'] = WinDLL('kernel32.dll')
-
-
+kernel32 = windll.kernel32
 CHAR = c_char
 ULONG_PTR = c_ulong
 SIZE_T = ULONG_PTR
@@ -70,97 +56,104 @@ _SECURITY_ATTRIBUTES._fields_ = [
 ]
 LPSECURITY_ATTRIBUTES = POINTER(_SECURITY_ATTRIBUTES)
 LPTHREAD_START_ROUTINE = WINFUNCTYPE(DWORD, LPVOID)
-WriteProcessMemory = _stdcall_libraries['kernel32.dll'].WriteProcessMemory
+WriteProcessMemory = kernel32.WriteProcessMemory
 WriteProcessMemory.restype = BOOL
 WriteProcessMemory.argtypes = [HANDLE, LPVOID, LPCVOID, SIZE_T, POINTER(SIZE_T)]
 WriteProcessMemory.__doc__ = \
 """BOOL WriteProcessMemory(HANDLE hProcess, LPVOID lpBaseAddress, LPCVOID lpBuffer, SIZE_T nSize, SIZE_T * lpNumberOfBytesWritten)
 ppython.h:86"""
-VirtualAllocEx = _stdcall_libraries['kernel32.dll'].VirtualAllocEx
+VirtualAllocEx = kernel32.VirtualAllocEx
 VirtualAllocEx.restype = LPVOID
 VirtualAllocEx.argtypes = [HANDLE, LPVOID, SIZE_T, DWORD, DWORD]
 VirtualAllocEx.__doc__ = \
 """LPVOID VirtualAllocEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect)
 ppython.h:87"""
-VirtualFreeEx = _stdcall_libraries['kernel32.dll'].VirtualFreeEx
+VirtualFreeEx = kernel32.VirtualFreeEx
 VirtualFreeEx.restype = BOOL
 VirtualFreeEx.argtypes = [HANDLE, LPVOID, SIZE_T, DWORD]
 VirtualFreeEx.__doc__ = \
 """BOOL VirtualFreeEx(HANDLE hProcess, LPVOID lpAddress, SIZE_T dwSize, DWORD dwFreeType)
 ppython.h:88"""
-LoadLibraryA = _stdcall_libraries['kernel32.dll'].LoadLibraryA
-LoadLibraryA.restype = HMODULE
-LoadLibraryA.argtypes = [LPCSTR]
-LoadLibraryA.__doc__ = \
-"""HMODULE LoadLibraryA(LPCSTR lpLibFileName)
-ppython.h:89"""
-GetProcAddress = _stdcall_libraries['kernel32.dll'].GetProcAddress
+
+
+FreeLibrary = kernel32.FreeLibrary
+FreeLibrary.restype = None
+FreeLibrary.argtypes = [HMODULE]
+
+PFreeLibrary = cast(FreeLibrary, LPTHREAD_START_ROUTINE)
+PLoadLibrary = cast(kernel32.LoadLibraryA, LPTHREAD_START_ROUTINE)
+
+GetExitCodeThread = kernel32.GetExitCodeThread
+GetExitCodeThread.restype = BOOL 
+GetExitCodeThread.argtypes = [HANDLE, LPDWORD]
+
+GetModuleFileName = kernel32.GetModuleFileNameA
+GetModuleFileName.restype = DWORD
+GetModuleFileName.argtypes = [HMODULE, LPSTR, DWORD]
+
+GetProcAddress = kernel32.GetProcAddress
 GetProcAddress.restype = FARPROC
 GetProcAddress.argtypes = [HMODULE, LPCSTR]
 GetProcAddress.__doc__ = \
 """FARPROC GetProcAddress(HMODULE hModule, LPCSTR lpProcName)
 ppython.h:90"""
-Process32First = _stdcall_libraries['kernel32.dll'].Process32First
+Process32First = kernel32.Process32First
 Process32First.restype = BOOL
 Process32First.argtypes = [HANDLE, LPPROCESSENTRY32]
 Process32First.__doc__ = \
 """BOOL Process32First(HANDLE hSnapshot, LPPROCESSENTRY32 lppe)
 ppython.h:91"""
-Process32Next = _stdcall_libraries['kernel32.dll'].Process32Next
+Process32Next = kernel32.Process32Next
 Process32Next.restype = BOOL
 Process32Next.argtypes = [HANDLE, LPPROCESSENTRY32]
 Process32Next.__doc__ = \
 """BOOL Process32Next(HANDLE hSnapshot, LPPROCESSENTRY32 lppe)
 ppython.h:91"""
-Thread32First = _stdcall_libraries['kernel32.dll'].Thread32First
+Thread32First = kernel32.Thread32First
 Thread32First.restype = BOOL
 Thread32First.argtypes = [HANDLE, LPTHREADENTRY32]
 Thread32First.__doc__ = \
 """BOOL Thread32First(HANDLE hSnapshot, LPTHREADENTRY32 lpte)
 ppython.h:93"""
-Thread32Next = _stdcall_libraries['kernel32.dll'].Thread32Next
+Thread32Next = kernel32.Thread32Next
 Thread32Next.restype = BOOL
 Thread32Next.argtypes = [HANDLE, LPTHREADENTRY32]
 Thread32Next.__doc__ = \
 """BOOL Thread32Next(HANDLE hSnapshot, LPTHREADENTRY32 lpte)
 ppython.h:93"""
-GetCurrentProcessId = _stdcall_libraries['kernel32.dll'].GetCurrentProcessId
+GetCurrentProcessId = kernel32.GetCurrentProcessId
 GetCurrentProcessId.restype = DWORD
 GetCurrentProcessId.argtypes = []
 GetCurrentProcessId.__doc__ = \
 """DWORD GetCurrentProcessId()
 ppython.h:94"""
-CreateToolhelp32Snapshot = _stdcall_libraries['kernel32.dll'].CreateToolhelp32Snapshot
+CreateToolhelp32Snapshot = kernel32.CreateToolhelp32Snapshot
 CreateToolhelp32Snapshot.restype = HANDLE
 CreateToolhelp32Snapshot.argtypes = [DWORD, DWORD]
 CreateToolhelp32Snapshot.__doc__ = \
 """HANDLE CreateToolhelp32Snapshot(DWORD dwFlags, DWORD th32ProcessID)
 ppython.h:95"""
-OpenProcess = _stdcall_libraries['kernel32.dll'].OpenProcess
+OpenProcess = kernel32.OpenProcess
 OpenProcess.restype = HANDLE
 OpenProcess.argtypes = [DWORD, BOOL, DWORD]
 OpenProcess.__doc__ = \
 """HANDLE OpenProcess(DWORD dwDesiredAccess, BOOL bInheritHandle, DWORD dwProcessId)
 ppython.h:96"""
-CreateRemoteThread = _stdcall_libraries['kernel32.dll'].CreateRemoteThread
+CreateRemoteThread = kernel32.CreateRemoteThread
 CreateRemoteThread.restype = HANDLE
 CreateRemoteThread.argtypes = [HANDLE, LPSECURITY_ATTRIBUTES, SIZE_T, LPTHREAD_START_ROUTINE, LPVOID, DWORD, LPDWORD]
 CreateRemoteThread.__doc__ = \
 """HANDLE CreateRemoteThread(HANDLE hProcess, LPSECURITY_ATTRIBUTES lpThreadAttributes, SIZE_T dwStackSize, LPTHREAD_START_ROUTINE lpStartAddress, LPVOID lpParameter, DWORD dwCreationFlags, LPDWORD lpThreadId)
 ppython.h:97"""
-WaitForSingleObject = _stdcall_libraries['kernel32.dll'].WaitForSingleObject
+WaitForSingleObject = kernel32.WaitForSingleObject
 WaitForSingleObject.restype = DWORD
 WaitForSingleObject.argtypes = [HANDLE, DWORD]
 WaitForSingleObject.__doc__ = \
 """DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds)
 ppython.h:98"""
-FreeLibrary = _stdcall_libraries['kernel32.dll'].FreeLibrary
-FreeLibrary.restype = BOOL
-FreeLibrary.argtypes = [HMODULE]
-FreeLibrary.__doc__ = \
-"""BOOL FreeLibrary(HMODULE hLibModule)
-ppython.h:99"""
-CloseHandle = _stdcall_libraries['kernel32.dll'].CloseHandle
+
+
+CloseHandle = kernel32.CloseHandle
 CloseHandle.restype = BOOL
 CloseHandle.argtypes = [HANDLE]
 CloseHandle.__doc__ = \
@@ -207,21 +200,4 @@ INFINITE = -1
 FALSE = 0
 TRUE = 1
 NULL = 0
-
-__all__ = ['FALSE','TRUE','NULL','FARPROC', 'CreateToolhelp32Snapshot', 'LPPROCESSENTRY32',
-		'WriteProcessMemory', 'VirtualAllocEx',
-		'tagPROCESSENTRY32', 'WaitForSingleObject', 'CHAR',
-		'LoadLibraryA', 'LPTHREAD_START_ROUTINE', 'ULONG_PTR',
-		'CreateRemoteThread', 'LPPROCESS_INFORMATION',
-		'_SECURITY_ATTRIBUTES', 'tagTHREADENTRY32',
-		'VirtualFreeEx', 'THREADENTRY32', 'PROCESS_INFORMATION','Process32Next', 
-		'Process32First', 'LPSECURITY_ATTRIBUTES', 'OpenProcess', 'Thread32Next',
-		'GetProcAddress', 'LPTHREADENTRY32', 'GetCurrentProcessId',
-		'PPROCESSENTRY32', 'Thread32First', 'FreeLibrary',
-		'PROCESSENTRY32', 'LPDWORD', 'SIZE_T', 'PTHREADENTRY32',
-		'_PROCESS_INFORMATION', 'CloseHandle', 'TH32CS_SNAPPROCESS',
-		'TH32CS_SNAPTHREAD', 'PROC_THREAD_SNAPSHOT', 'MEM_COMMIT', 'MEM_RELEASE',
-		'PAGE_READWRITE','PROCESS_QUERY_INFORMATION', 'PROCESS_CREATE_THREAD',
-		'PROCESS_VM_OPERATION', 'PROCESS_VM_WRITE','PROCESS_MOST', 'INFINITE']
-
 
