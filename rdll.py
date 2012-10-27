@@ -12,13 +12,12 @@ http://sam.zoy.org/wtfpl/COPYING for more details.
 """
 import os
 from _ctypes import FUNCFLAG_CDECL as _FUNCFLAG_CDECL,\
+FUNCFLAG_STDCALL as _FUNCFLAG_STDCALL,\
 FUNCFLAG_PYTHONAPI as _FUNCFLAG_PYTHONAPI,\
 FUNCFLAG_USE_ERRNO as _FUNCFLAG_USE_ERRNO,\
 FUNCFLAG_USE_LASTERROR as _FUNCFLAG_USE_LASTERROR
 from _kernel32 import PLoadLibraryW as PLoadLibrary
 from extern import pefile
-
-__all__ = []
 
 import functools
 from _kernel32 import *
@@ -160,7 +159,13 @@ def _pack_args(*args):
 	for i, arg in enumerate(args):
 		fields.append(('arg%d' % i, type(arg),))
 	_Args._fields_ = fields
-	return _Args(*args)
+	Args = _Args()
+	for i, arg in enumerate(args):
+		try:
+			setattr(Args, 'arg%d' % i, arg)
+		except:
+			setattr(Args, 'arg%d' % i, arg.value)
+	return Args
 
 
 class _RCFuncPtr(object):
@@ -178,7 +183,8 @@ class _RCFuncPtr(object):
 		elif hasattr(arg, 'contents'):
 			return arg.contents
 		else:
-			raise Exception('Don\'t know how to get the value of arg.\nType: %s' % type(arg))
+			return arg
+			#raise Exception('Don\'t know how to get the value of arg.\nType: %s' % type(arg))
 
 	def _valtoargtype(self, arg, argtype):
 		result = 0
@@ -196,11 +202,21 @@ class _RCFuncPtr(object):
 		# Array type
 		elif hasattr(argtype, '_length_')\
 		or type(argtype._type_) != str: # Pointer type
-			result = cast(arg, argtype)
+			try:
+				result = cast(arg, argtype)
+			except:
+				result = arg
 		elif hasattr(argtype, 'value'):
-			result = argtype(arg)
+			try:
+				result = argtype(arg)
+			except:
+				result = arg
 		else:
-			raise Exception('Don\'t know how to convert arg to argtype.\nArg: %s\nArgtype: %s' % (arg, argtype))
+			try:
+				result = cast(arg, c_void_p)
+			except:
+				result = arg
+			#raise Exception('Don\'t know how to convert arg to argtype.\nArg: %s\nArgtype: %s' % (arg, argtype))
 		return result
 
 	def _alloc_set_var(self, val):
@@ -220,9 +236,12 @@ class _RCFuncPtr(object):
 		buffer = VirtualAllocEx(self._hprocess_, 0L, buflen, MEM_COMMIT, PAGE_READWRITE)
 		if buffer == NULL:
 			raise Exception('Could not allocate our remote buffer.')
-
-		if WriteProcessMemory(self._hprocess_, LPCVOID(buffer), val, buflen, ULONG_PTR(0)) == FALSE:
-			raise Exception('Could not write to our remote variable.')
+		try:
+			if WriteProcessMemory(self._hprocess_, LPCVOID(buffer), val, buflen, ULONG_PTR(0)) == FALSE:
+				raise Exception('Could not write to our remote variable.')
+		except ArgumentError:
+			if WriteProcessMemory(self._hprocess_, LPCVOID(buffer), addressof(val), buflen, ULONG_PTR(0)) == FALSE:
+				raise Exception('Could not write to our remote variable.')
 
 		return buffer
 
@@ -236,7 +255,7 @@ class _RCFuncPtr(object):
 			argcount = len(more)
 			for i, argtype in enumerate(funcptr.argtypes):
 				arg = 0
-				if i > argcount:
+				if i >= argcount:
 					arg = argtype()
 				elif hasattr(more[i], '_type_'):
 					if more[i]._type_ == argtype:
@@ -244,7 +263,7 @@ class _RCFuncPtr(object):
 					else:
 						arg = self._valtoargtype(self._valueof(more[i]), argtype)
 				else:
-					arg = self._valtoargtype(more[i])
+					arg = self._valtoargtype(more[i], argtype)
 				args.append(arg)
 			if argcount > 1:
 				lpParameter = _pack_args(*args)
