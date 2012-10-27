@@ -2,11 +2,17 @@ from ctypes import *
 from ctypes.wintypes import *
 import _ctypes
 
+
 #############
 # Constants #
 #############
 
 kernel32 = WinDLL('kernel32.dll')
+_isx64 = sizeof(c_void_p) == sizeof(c_ulonglong)
+
+def is_x64():
+	global _isx64
+	return _isx64
 
 # ToolhelpSnapshot flags
 TH32CS_SNAPPROCESS = 0x00000002
@@ -35,11 +41,24 @@ NULL = 0
 
 # Simple type declarations
 CHAR = c_char
-ULONG_PTR = c_ulong
-SIZE_T = ULONG_PTR
 LPDWORD = POINTER(DWORD)
 FARPROC = CFUNCTYPE(None)
+LPFARPROC = POINTER(FARPROC)
 LPTHREAD_START_ROUTINE = WINFUNCTYPE(DWORD, LPVOID)
+
+# Some general type declarations
+PWORD = POINTER(WORD)
+PDWORD = POINTER(DWORD)
+PHMODULE = POINTER(HMODULE)
+LONG_PTR = c_longlong if _isx64 else LONG
+ULONG_PTR = c_ulonglong if _isx64 else DWORD
+UINT_PTR = c_ulonglong if _isx64 else c_uint
+SIZE_T = ULONG_PTR
+POINTER_TYPE = ULONG_PTR
+LP_POINTER_TYPE = POINTER(POINTER_TYPE)
+
+c_uchar_p = POINTER(c_ubyte)
+c_ushort_p = POINTER(c_ushort)
 
 # Struct/Union declarations
 class PROCESSENTRY32(Structure):
@@ -95,7 +114,6 @@ PTHREADENTRY32 = LPTHREADENTRY32 = POINTER(THREADENTRY32)
 LPPROCESS_INFORMATION = POINTER(PROCESS_INFORMATION)
 LPSECURITY_ATTRIBUTES = POINTER(SECURITY_ATTRIBUTES)
 LPMODULEINFO = POINTER(MODULEINFO)
-
 
 #######################
 # Function Prototypes #

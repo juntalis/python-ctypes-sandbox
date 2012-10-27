@@ -2,3 +2,10 @@ obj
 *.dll
 *.pyc
 /.idea/
+/util/
+/include/
+/src/
+/*.txt
+/_tab.py
+/*.py
+/Portable_Executable_Format.xml

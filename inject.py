@@ -1,10 +1,17 @@
-﻿from cutil import create_remote_thread, get_func_offset, find_parent_process
+﻿"""
+This program is free software. It comes without any warranty, to
+the extent permitted by applicable law. You can redistribute it
+and/or modify it under the terms of the Do What The Fuck You Want
+To Public License, Version 2, as published by Sam Hocevar. See
+http://sam.zoy.org/wtfpl/COPYING for more details.
+"""
+from cutil import create_remote_thread, get_func_offset, _find_parent_process
 from pyctypes import *
 
 if __name__=='__main__':
 	# Okay, given we already have the address to LoadLibrary, we can
 	# begin by getting our parent process id and thread id.
-	procPair = find_parent_process()
+	procPair = _find_parent_process()
 	if procPair is None:
 		raise WinError('Failed to locate our parent process.')
 	(pi, ti) = procPair
