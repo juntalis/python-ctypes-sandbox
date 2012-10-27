@@ -158,7 +158,7 @@ def _pack_args(*args):
 
 	fields = []
 	for i, arg in enumerate(args):
-		fields.push(('arg%d' % i, type(arg),))
+		fields.append(('arg%d' % i, type(arg),))
 	_Args._fields_ = fields
 	return _Args(*args)
 
