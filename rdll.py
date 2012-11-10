@@ -1,14 +1,12 @@
-#!/usr/bin/env python
 # encoding: utf-8
 """
-rdll.py
-Created by Charles on 10/25/12.
-
-		This program is free software. It comes without any warranty, to
+This program is free software. It comes without any warranty, to
 the extent permitted by applicable law. You can redistribute it
 and/or modify it under the terms of the Do What The Fuck You Want
 To Public License, Version 2, as published by Sam Hocevar. See
 http://sam.zoy.org/wtfpl/COPYING for more details.
+
+TODO: Make this not suck.
 """
 import os
 from _ctypes import FUNCFLAG_CDECL as _FUNCFLAG_CDECL,\
@@ -31,7 +29,7 @@ def is_x64(): return _isx64
 # Utility stuff (decorators/base classes/functions)
 def memoize(obj):
 	"""
-	From the Python Decorator Library:
+	From the Python Decorator Library (http://wiki.python.org/moin/PythonDecoratorLibrary):
 	Cache the results of a function call with specific arguments. Note that this decorator ignores **kwargs.
 	"""
 	cache = obj.cache = {}
@@ -153,8 +151,8 @@ def _bypid(pid):
 
 
 def _pack_args(*args):
+	""" Pack multiple arguments into  """
 	class _Args(Structure): pass
-
 	fields = []
 	for i, arg in enumerate(args):
 		fields.append(('arg%d' % i, type(arg),))
@@ -164,8 +162,11 @@ def _pack_args(*args):
 		try:
 			setattr(Args, 'arg%d' % i, arg)
 		except:
-			setattr(Args, 'arg%d' % i, arg.value)
-	return Args
+			try:
+				setattr(Args, 'arg%d' % i, arg.value)
+			except:
+				setattr(Args, 'arg%d' % i, arg.contents)
+	return pointer(Args)
 
 
 class _RCFuncPtr(object):

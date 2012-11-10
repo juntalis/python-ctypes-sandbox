@@ -1,6 +1,8 @@
 ## Python CTypes Playground
 
-This repository is more of a less sandbox for experimenting with various Win32-based functionality using Python CTypes. Most of it will most likely deal with the internals of the Portable Executable File Format, but some of it may revolve around some more basic stuff. At the moment, there a few things some might find interesting or useful. I've detailed these below. All code found in this repository (except peutils) is released under WTFPL, so do whatever you want with it - I don't care.
+This repository is more of a less sandbox for experimenting with various Win32-based functionality using Python CTypes. Most of it will most likely deal with the internals of the Portable Executable File Format, but some of it may revolve around some more basic stuff. At the moment, there a few things some might find interesting or useful. I've detailed these below. All code found in this repository - except peutils, and code found in the pyctypes file (See the comments of that file for author information) - is released under WTFPL, so do whatever you want with it - I don't care.
+
+For a simpler example of using python to inject DLLs, see older versions of this repository. The original example was broken due to my lack of foresight.
 
 #### Python Remote CTypes (RDLL) - rdll.py
 
@@ -29,34 +31,14 @@ This module contains a few ctypes DLL interfaces for injecting dlls into remote 
 	testdll.Finalize()
 
 
-#### Python DLL Injection - inject.py
+#### Command Prompt Reversing
 
-This example uses the Python ctypes module to inject the included dll, testdll.dll into the parent process. (Most likely cmd.exe if you run this example from the command prompt)
+Running the rpy.cmd file will run a script that injects the current python DLL into your command prompt, initializes the interpreter, and opens a python shell in that process with some pre-existing work I'm doing on reverse engineering command prompt. (Work I'm doing as I debate whether or not to go through with a project idea)
 
-Currently, this example only works on x86 processes and with the 32-bit version of Python. (I'm guessing this is due to the size difference in datatypes needed for calling the appropriate win32 functions) I'll see if I can get a working example for x64 processes when I get a chance.
+Unfortunately, the current code is most likely not all that portable across different versions of command prompt, but if you do happen to have the same version as mine, you should be able to call various of the built-in command prompt functions such as:
 
-From the command prompt:
+	cmd.start('/WAIT calc.exe')
+	cmd.set('')
+	cmd.dir('..')
 
-	C:\Development\cpp.sandbox\ppython\ppython>build.bat
-	Setting environment for using Microsoft Visual Studio 2010 x86 tools.
-	Microsoft (R) 32-bit C/C++ Optimizing Compiler Version 16.00.40219.01 for 80x86
-	Copyright (C) Microsoft Corporation.  All rights reserved.
-
-	testdll.c
-	Microsoft (R) Incremental Linker Version 10.00.40219.01
-	Copyright (C) Microsoft Corporation.  All rights reserved.
-
-	/out:testdll.exe
-	-DLL
-	-OPT:REF
-	-OPT:ICF
-	-OUT:testdll.dll
-	-IMPLIB:C:\Development\cpp.sandbox\ppython\ppython\obj\testdll.lib
-	C:\Development\cpp.sandbox\ppython\ppython\obj\testdll.obj
-	
-	C:\Development\cpp.sandbox\ppython\ppython>python inject.py
-	python.exe
-	cmd.exe
-	PARENT: Hello World
-	PARENT: Goodbye World
-	All done!
+If you run the rpython.py file from an existing command prompt, calling cmd.prompt() will print the current value of your PROMPT. In addition to the builtin functions I mapped, there's a few internally-used functions that I'm working on reversing.

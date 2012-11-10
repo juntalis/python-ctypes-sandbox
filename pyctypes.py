@@ -1,4 +1,15 @@
-﻿from _kernel32 import *
+﻿"""
+This file contains declarations from two sources. The Py* classes and the create_var_object function, I found on a
+website written in Chinese, found here:
+
+http://hyry.dip.jp/tech/slice/slice.html/10
+
+The author is listed as, "RY".
+
+The FILE bit at the end is from the pythonhdr.py file in the ctypegen project. (http://code.google.com/p/ctypesgen/)
+That project is released under the New BSD License.
+"""
+from _kernel32 import *
 import sys
 
 _pythonDLL = None
@@ -32,6 +43,7 @@ class PyVarObject(PyObject):
 	_fields_ = [("size", c_size_t)]
 
 
+#noinspection PyTypeChecker
 class PyStr(PyVarObject):
 	_fields_ = [("hash", c_long),
 				("state", c_int),
