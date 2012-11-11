@@ -28,7 +28,8 @@ class InternalFunc(object):
 
 # Currently mapped internal functions.
 _funcs = {
-	'dir': InternalFunc(0x4AD0AEEB, BOOL, c_wchar_p),
+	'chdir': InternalFunc(0x4AD10511, c_int, c_wchar_p),
+	'dir': InternalFunc(0x4AD0AEEB, c_int, c_wchar_p),
 	'prompt': InternalFunc(0x4AD0C60C, None),
 	'dumpstr': InternalFunc(0x4AD1F174, c_int),
 	'set': InternalFunc(0x4AD1C9D2, c_int, c_wchar_p),
@@ -87,7 +88,8 @@ class ComSpec(object):
 		self.echo_flag = cast(_offset(0x4AD2408C), POINTER(BOOL))
 		# This is actually the jump table for some of the internal functions, but whatever. Haven't
 		# figured a way to implement this in ctypes.
-		self.jump_table = cast(_offset(0x4AD25880), c_wchar_p)
+		self.jump_table = cast(_offset(0x4AD25880), POINTER(c_wchar_p))
+		self.cd = self.chdir
 
 	def __getattr__(self, item):
 		if self._funcs_.has_key(item):
@@ -105,4 +107,5 @@ class ComSpec(object):
 			return super(ComSpec, self).__getitem__(item)
 
 cmd = ComSpec()
-code.interact('(Interactive Console in Command Prompt)', None, locals())
+shell = code.InteractiveConsole(locals())
+shell.interact('(Interactive Console in Command Prompt)')

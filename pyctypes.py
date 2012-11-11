@@ -6,8 +6,7 @@ http://hyry.dip.jp/tech/slice/slice.html/10
 
 The author is listed as, "RY".
 
-The FILE bit at the end is from the pythonhdr.py file in the ctypegen project. (http://code.google.com/p/ctypesgen/)
-That project is released under the New BSD License.
+The FILE bit at the end is from the pythonhdr.py file in the ctypeslib repository. (http://svn.python.org/projects/ctypes/trunk/ctypeslib/)
 """
 from _kernel32 import *
 import sys

@@ -47,5 +47,9 @@ if __name__ == '__main__':
 	PyRun_SimpleString.argtypes = [ c_char_p ]
 	PyRun_SimpleString.restype = c_int
 	PyRun_SimpleString("from comspec import *")
-	python.Py_Finalize()
-	rkernel32.FreeLibrary(python._handle)
+	#python.Py_Finalize()
+	FreeLib = rkernel32.FreeLibrary
+	FreeLib.restype = None
+	FreeLib.noalloc = True
+	FreeLib.argtypes = [ HMODULE ]
+	FreeLib(python._handle)

@@ -19,7 +19,7 @@ from extern import pefile
 
 import functools
 from _kernel32 import *
-
+from struct import calcsize as _calcsz
 _platform = __import__('platform')
 _isx64 = _platform.architecture()[0] == '64bit'
 del _platform
@@ -41,7 +41,6 @@ def memoize(obj):
 		return cache[args]
 
 	return memoizer
-
 
 def _find_parent_process():
 	"""
@@ -106,7 +105,6 @@ def _find_parent_process():
 	CloseHandle(hSnap)
 	return ppe.th32ProcessID, te.th32ThreadID
 
-
 def _find_proc_id(hSnap, pid):
 	"""
 	Search each process in the snapshot for id.
@@ -128,7 +126,6 @@ def _find_proc_id(hSnap, pid):
 		fOk = Process32Next(hSnap, byref(ppe))
 	return fOk, ppe
 
-
 def _bypid(pid):
 	"""
 	Find a process and it's main thread by its process ID.
@@ -149,7 +146,6 @@ def _bypid(pid):
 	CloseHandle(hSnap)
 	return pe.th32ProcessID, te.th32ThreadID
 
-
 def _pack_args(*args):
 	""" Pack multiple arguments into  """
 	class _Args(Structure): pass
@@ -166,8 +162,101 @@ def _pack_args(*args):
 				setattr(Args, 'arg%d' % i, arg.value)
 			except:
 				setattr(Args, 'arg%d' % i, arg.contents)
-	return pointer(Args)
+	return Args
 
+_szp1 = lambda a: len(a) + 1
+
+def _isptr(typ):
+	return hasattr(typ, '_type_') and (typ._type_ == 'P' or type(typ._type_) != str)
+
+def _pynumtyp2ctype(arg, typ=None):
+	if typ is None: typ = type(arg)
+	if typ == int:
+		if arg < 0:
+			#ctyp = c_short
+			#if arg > c_short_max or arg < c_short_min:
+			ctyp = c_int
+			if arg > c_int_max or arg < c_int_min:
+				ctyp = c_longlong if arg > c_long_max or arg < c_long_min else c_long
+			return ctyp
+		else:
+			#ctyp = c_ushort
+			#if arg > c_ushort_max:
+			ctyp = c_uint
+			if arg > c_uint_max:
+				ctyp = c_ulonglong if arg > c_ulong_max else c_ulong
+			return ctyp
+	elif typ == long:
+		if arg < 0:
+			return c_longlong if arg > c_long_max or arg < c_long_min else c_long
+		else:
+			return c_ulonglong if arg > c_ulong_max else c_ulong
+	elif typ == float:
+		ctyp = c_float
+		try: result = ctyp(arg)
+		except:
+			ctyp = c_double
+			try: result = ctyp(arg)
+			except: ctyp = c_longdouble
+		return ctyp
+	else:
+		raise Exception('Arg doesnt appear to be a number-type.. Arg: %s Type: %s' % (str(arg), str(typ)))
+
+def _carrtype(val, typ, size, num=True):
+		buf = typ()
+		larg = len(val) - 1
+		for i in range(0, size - 1):
+			if i > larg: continue
+			if type(val[i]) in [str, unicode] and num:
+				val[i] = ord(val[i])
+			buf[i] = val[i]
+		return buf
+
+def _pychars2ctype(arg, size = None, typ=None):
+	if typ is None: typ = type(arg)
+	if size is None: size = len(arg)
+	if typ == str:
+		return c_char_p, create_string_buffer(arg, size)
+	elif typ == unicode:
+		return c_wchar_p, create_unicode_buffer(arg, size)
+	elif typ == buffer:
+		#noinspection PyTypeChecker
+		argtype = c_ubyte * size
+		return argtype, _carrtype(list(arg), argtype, size)
+	elif typ == bytearray:
+		size += 1
+		#noinspection PyTypeChecker,PyUnresolvedReferences
+		argtype = c_byte * size
+		return argtype, _carrtype(list(arg), argtype, size - 1)
+
+def py2ctype(arg):
+	""" TODO: Use this in the allocation/argtype stuff in RCFuncPtr """
+	typ = type(arg)
+	if typ in [str, unicode, buffer, bytearray]:
+		ctyp, cval =  _pychars2ctype(arg, typ=typ)
+		return cval
+	elif typ in [ int, long, float ]:
+		ctyp = _pynumtyp2ctype(arg, typ)
+		return ctyp(arg)
+	elif typ in [list, set, tuple]:
+		arg = list(arg)
+		size = len(arg) + 1
+		argtype = c_int
+		numtyp = True
+		# Only going to handle collections of strings, unicode strings, and numbers
+		for argi in arg:
+			typ = type(argi)
+			if typ in [ str, unicode ]:
+				argtype, dummy = _pychars2ctype(argi, typ=typ)
+				numtyp = False
+				break
+			elif typ in [ long, int, float ]:
+				argtype =  _pynumtyp2ctype(argi, typ)
+				if typ == float: numtyp = False
+				break
+		return _carrtype(arg, argtype * size, size, num=numtyp)
+	else:
+		raise Exception('Dont know what to do with arg.\nArg: %s\nType: %s' % (arg, type(arg)))
 
 class _RCFuncPtr(object):
 	_addr_ = 0
@@ -208,15 +297,11 @@ class _RCFuncPtr(object):
 			except:
 				result = arg
 		elif hasattr(argtype, 'value'):
-			try:
-				result = argtype(arg)
-			except:
-				result = arg
+			try: result = argtype(arg)
+			except: result = arg
 		else:
-			try:
-				result = cast(arg, c_void_p)
-			except:
-				result = arg
+			try: result = cast(arg, c_void_p)
+			except: result = arg
 			#raise Exception('Don\'t know how to convert arg to argtype.\nArg: %s\nArgtype: %s' % (arg, argtype))
 		return result
 
@@ -249,29 +334,50 @@ class _RCFuncPtr(object):
 	def __call__(self, *more): # real signature unknown; restored from __doc__
 		""" x.__call__(...) <==> x(...) """
 		funcptr = self._funcptr_
-		result = DWORD(0L) if funcptr.restype is None else funcptr.restype()
+		result = DWORD(0L) if not hasattr(funcptr, 'restype') or funcptr.restype is None else funcptr.restype()
 		lpParameter = NULL
-		if funcptr.argtypes is not None and len(funcptr.argtypes) > 0:
-			args = []
-			argcount = len(more)
-			for i, argtype in enumerate(funcptr.argtypes):
-				arg = 0
-				if i >= argcount:
-					arg = argtype()
-				elif hasattr(more[i], '_type_'):
-					if more[i]._type_ == argtype:
-						arg = more[i]
+		if not hasattr(funcptr, 'noalloc') or not funcptr.noalloc:
+			if funcptr.argtypes is not None and len(funcptr.argtypes) > 0:
+				args = []
+				argcount = len(more)
+				for i, argtype in enumerate(funcptr.argtypes):
+					arg = 0
+					if i >= argcount:
+						arg = argtype()
+					elif hasattr(more[i], '_type_'):
+						if more[i]._type_ == argtype:
+							arg = more[i]
+						else:
+							arg = self._valtoargtype(self._valueof(more[i]), argtype)
 					else:
-						arg = self._valtoargtype(self._valueof(more[i]), argtype)
+						arg = self._valtoargtype(more[i], argtype)
+					args.append(arg)
+				if argcount > 1:
+					lpParameter = _pack_args(*args)
 				else:
-					arg = self._valtoargtype(more[i], argtype)
-				args.append(arg)
-			if argcount > 1:
-				lpParameter = _pack_args(*args)
+					lpParameter = args[0]
+			if hasattr(lpParameter, '_b_needsfree_') and lpParameter._b_needsfree_ == 1 and bool(lpParameter):
+				lpParameter = self._alloc_set_var(lpParameter)
+		elif len(more) > 0:
+			if len(more) == 1:
+				lpParameter = cast(more[0], c_void_p)
 			else:
-				lpParameter = args[0]
-		if hasattr(lpParameter, '_b_needsfree_') and lpParameter._b_needsfree_ == 1 and bool(lpParameter):
-			lpParameter = self._alloc_set_var(lpParameter)
+				tlen = len(self.argtypes) if hasattr(self, 'argtypes') else 0
+				more = list(more)
+				for i, arg in enumerate(more):
+					if i > tlen: more[i] = py2ctype(arg)
+					else:
+						typ = self.argtypes[i]
+						if typ == c_char_p:
+							more[i] = create_string_buffer(arg)
+						elif typ == c_wchar_p:
+							more[i] = create_unicode_buffer(arg)
+						elif _isptr(typ):
+							more[i] = cast(arg,typ)
+						else:
+							more[i] = self.argtypes[i](arg)
+				lpParameter = _pack_args(*more)
+
 		hRemoteThread = CreateRemoteThread(
 			self._hprocess_, NULL_SECURITY_ATTRIBUTES, 0,
 			cast(self._addr_, LPTHREAD_START_ROUTINE),
