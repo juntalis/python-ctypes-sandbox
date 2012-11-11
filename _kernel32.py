@@ -355,7 +355,47 @@ EnumProcessModulesEx.argtypes = EnumProcessModules.argtypes + [ DWORD ]
 EnumProcessModules.__doc__ = """ Retrieves a handle for each module in the specified process. """
 EnumProcessModulesEx.__doc__ = """ Retrieves a handle for each module in the specified process that meets the specified filter criteria. """
 
+GetCurrentProcess = kernel32.GetCurrentProcess
+GetCurrentProcess.restype = HANDLE
+GetCurrentProcess.argtypes = [ ]
+GetCurrentProcess.__doc__ = """ Retrieves a pseudo handle for the current process. """
+
+_ReadProcessMemory = kernel32.ReadProcessMemory
+_ReadProcessMemory.restype = BOOL
+_ReadProcessMemory.argtypes = [ HANDLE, LPCVOID, LPVOID, SIZE_T, POINTER(SIZE_T) ]
+
+def ReadProcessMemory(size, base = None, handle = None):
+	if handle is None: handle = GetCurrentProcess()
+	if base is None: base = handle
+	elif type(base) != c_void_p: base = cast(base, c_void_p)
+	buff = (c_ubyte * size)()
+	sz = SIZE_T(size)
+	if not bool(_ReadProcessMemory(handle, base, cast(buff, LPVOID), sz, byref(sz) )):
+		del buff
+		return None
+	try:
+		resize(buff, sz.value)
+	except:
+		pass
+	buff.size = sz.value
+	return buff
+
+ReadProcessMemory.__doc__ = """ Reads data from an area of memory in a specified process. The entire area to be read must be accessible or the operation fails. """
+
 # Helper declarations
 NULL_SECURITY_ATTRIBUTES = cast(NULL, LPSECURITY_ATTRIBUTES)
 SZPROCESSENTRY = sizeof(PROCESSENTRY32)
 SZTHREADENTRY = sizeof(THREADENTRY32)
+
+# Size stuff
+def limits(typ):
+	umin = 0
+	umax = (256 ** sizeof(typ))
+	max = (umax / 2) - 1
+	min = (max * -1)
+	umax -= 1
+	return min, max, umin, umax
+
+c_short_min, c_short_max, c_ushort_min, c_ushort_max = limits(c_short)
+c_int_min, c_int_max, c_uint_min, c_uint_max = limits(c_int)
+c_long_min, c_long_max, c_ulong_min, c_ulong_max = limits(c_long)
