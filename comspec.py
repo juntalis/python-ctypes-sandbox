@@ -8,7 +8,11 @@ http://sam.zoy.org/wtfpl/COPYING for more details.
 
 Non-portable stuff.
 """
-import code
+import code, sys, os, time
+mydir = os.path.abspath(os.path.dirname(__file__))
+if mydir.lower() not in [p.lower() for p in sys.path]:
+	sys.path.insert(0, mydir)
+
 from _kernel32 import *
 import extern.pefile as pefile
 
@@ -16,6 +20,14 @@ pe = pefile.PE(GetModuleFileName(NULL), fast_load=True)
 _imgbase = pe.OPTIONAL_HEADER.ImageBase
 _modbase = GetModuleHandle()
 mem_offset = lambda a: a + _modbase - _imgbase
+
+def address_of(cobj):
+	"""
+	Ctypes variation of this function doesn't appear to be
+	accurate all the time, thus I decided to write my own.
+	"""
+	return cast(cobj, c_void_p).value
+
 
 class InternalFunc(object):
 
@@ -39,7 +51,7 @@ def InternalData(offset, restype = None, size = None):
 		else:
 			# We'll assume this should be an array
 			retfunc = lambda a,s: (restype * s).from_address(a)
-	
+
 	if size is None:
 		return retfunc(addr)
 	else:
@@ -108,15 +120,100 @@ class envdata(Structure):
 		('max', c_uint),
 	]
 
+class node_arg(Structure):
+	_fields_ = [
+		('unknown', c_ubyte * 60),
+		('cmdline', c_wchar_p),
+	]
+
+jump_entry_func = WINFUNCTYPE(c_int, POINTER(node_arg))
+
 class jump_entry(Structure):
 	_fields_ = [
-		('name', c_wchar_p),
-		('func', WINFUNCTYPE(c_int)),
+		('_name', ULONG_PTR),
+		('func', jump_entry_func),
 		('flags', WORD),
 		('msgno', ULONG),
 		('msgno2', ULONG),
-		('msgno3', ULONG)
+		('msgno3', ULONG),
 	]
+
+	@property
+	def funcaddr(self):
+		return address_of(self.func)
+
+	@property
+	def name(self):
+		if long(self._name) == 0L:
+			return None
+		else:
+			return wstring_at(self._name).encode()
+
+	@property
+	def uname(self):
+		if long(self._name) == 0L:
+			return None
+		else:
+			return wstring_at(self._name).encode().upper()
+
+	@name.setter
+	def name(self, value):
+		if isinstance(value, basestring):
+			cvalue = create_unicode_buffer(value, len(value))
+			self._name = address_of(cvalue)
+		else:
+			self._name = value
+
+class FuncConsole(code.InteractiveConsole):
+	pass
+
+class JumpTable(object):
+	_entries_ = {}
+	def __init__(self, base):
+		self._addr = mem_offset(base)
+		# Trying to figure out a good portable way
+		# to find the end of our jump table and
+		# start of our prompt buffer.
+		self._end = mem_offset(0x4AD25E40)
+
+	def explore(self, idx):
+		global stub, funcsh
+		funcsh.set_idx(idx)
+		self[idx].func = stub
+
+	def __getitembyname__(self, name):
+		i = 0
+		while True:
+			try:
+				entry = self.__getitem__(i)
+				if entry.uname == name:
+					super(JumpTable, self).__setattr__(name, entry)
+					return entry
+				i += 1
+			except IndexError:
+				raise AttributeError(name)
+
+	def __getitem__(self, name_or_idx):
+		if isinstance(name_or_idx, basestring):
+			result = self.__getitembyname__(name_or_idx.upper())
+		elif type(name_or_idx) in [ long, int]:
+			name_or_idx = int(name_or_idx)
+			if name_or_idx in self._entries_:
+				result = jump_entry.from_address(self._entries_[name_or_idx]['addr'])
+			else:
+				addr = self._addr + (sizeof(jump_entry) * name_or_idx)
+				if addr >= self._end:
+					errmsg = 'Index %d is out of range of the jump table!' % name_or_idx
+					raise IndexError(errmsg)
+				result = jump_entry.from_address(addr)
+				self._entries_[name_or_idx] = {
+					'addr': addr,
+					'name': result.uname
+				}
+		else:
+			raise IndexError('Dont know what to do with index specified.')
+		return result
+
 
 class ComSpec(object):
 	def __init__(self):
@@ -126,7 +223,7 @@ class ComSpec(object):
 		# and only argument. Unfortunately, I haven't figured out much about
 		# the struct of the parse node, other than the fact that it has a
 		# wchar* offset 60 bytes from its
-		self.jump_table = InternalData(0x4AD25880, restype=jump_entry)
+		self.jump_table = JumpTable(0x4AD25880)
 		self.cd = self.chdir
 
 	def __getattr__(self, item):
@@ -146,4 +243,47 @@ class ComSpec(object):
 
 cmd = ComSpec()
 shell = code.InteractiveConsole(locals())
-shell.interact('(Interactive Console in Command Prompt)')
+class FuncConsole(code.InteractiveConsole):
+	def __init__(self, table):
+		self.table = table
+		locs = locals()
+		globs = globals()
+		for k in globs.keys():
+			if k not in locs:
+				locs[k] = globs[k]
+		for k in shell.locals.keys():
+			if k not in locs:
+				locs[k] = shell.locals[k]
+		self.__name__ = 'unknown'
+		self.original = None
+		code.InteractiveConsole.__init__(self, locs, "<console>")
+	
+	def set_idx(self, idx):
+		entry = self.table[idx]
+		if entry.name is None:
+			self.__name__ = '(Interactive Console in Jump Entry #%d)' % idx
+		else:
+			self.__name__ = '(Interactive Console in Jump Entry %s)' % entry.name
+		self.original = jump_entry_func.from_address(entry.funcaddr)
+		return self
+		
+	def chain_interact(self):
+		try:
+			self.interact(self.__name__)
+		except KeyboardInterrupt:
+			pass
+		return self
+
+funcsh = FuncConsole(cmd.jump_table)
+def entry_func_stub(node):
+	global funcsh
+	return funcsh.chain_interact().original(node)
+stub = jump_entry_func(entry_func_stub)
+funcsh.locals = locals()
+#cmd.jump_table.explore(0)
+shell.locals = locals()
+try:
+	shell.interact('(Interactive Console in Command Prompt)')
+except KeyboardInterrupt:
+	pass
+
