@@ -20,11 +20,6 @@ from extern import pefile
 import functools
 from _kernel32 import *
 from struct import calcsize as _calcsz
-_platform = __import__('platform')
-_isx64 = _platform.architecture()[0] == '64bit'
-del _platform
-
-def is_x64(): return _isx64
 
 # Utility stuff (decorators/base classes/functions)
 def memoize(obj):

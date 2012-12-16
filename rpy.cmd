@@ -1,6 +1,7 @@
 @echo off
 if not "%PROCESSOR_ARCHITECTURE%"=="x86" (
-"%WinDir%\SysWOW64\cmd.exe" /C "%~dpnx0"
+rem Changed to /K to allow seeing how changes affected the command prompt post-run
+"%WinDir%\SysWOW64\cmd.exe" /K "%~dpnx0"
 if errorlevel 1 exit /B %ERRORLEVEL%
 exit /B 0
 )

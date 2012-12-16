@@ -19,8 +19,8 @@ def _pythondll():
 		_pythonDLL = sys.dllhandle, GetModuleFileName(sys.dllhandle)
 	return _pythonDLL
 
-c_intptr_t = c_int64 if is_x64() else c_int
-c_uintptr_t = c_uint64 if is_x64() else c_uint
+c_intptr_t = c_int64 if is_x64 else c_int
+c_uintptr_t = c_uint64 if is_x64 else c_uint
 bitset = c_char_p
 LPPyGetSetDef = c_void_p
 va_list = c_void_p

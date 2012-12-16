@@ -10,21 +10,40 @@ Non-portable stuff.
 """
 import code
 from _kernel32 import *
+import extern.pefile as pefile
 
-_proc_base = GetModuleHandleA(cast(NULL, c_char_p))
-_re_base = 0x4AD00000
-_offset = lambda a: a - _re_base + _proc_base
+pe = pefile.PE(GetModuleFileName(NULL), fast_load=True)
+_imgbase = pe.OPTIONAL_HEADER.ImageBase
+_modbase = GetModuleHandle()
+mem_offset = lambda a: a + _modbase - _imgbase
 
 class InternalFunc(object):
 
 	def __init__(self, offset, restype, *argtypes):
 		self.restype = restype
 		self.argtypes = argtypes if len(argtypes) > 0 else []
-		self.addr = _offset(offset)
+		self.addr = mem_offset(offset)
 		self._func = WINFUNCTYPE(self.restype, *self.argtypes)(self.addr)
 
 	def __call__(self, *args, **kwargs):
 		return self._func(*args)
+
+def InternalData(offset, restype = None, size = None):
+	addr = mem_offset(offset)
+	retfunc = string_at
+	if restype == c_wchar_p:
+		retfunc = wstring_at
+	elif restype is not None:
+		if size is None:
+			retfunc = lambda a: restype.from_address(a)
+		else:
+			# We'll assume this should be an array
+			retfunc = lambda a,s: (restype * s).from_address(a)
+	
+	if size is None:
+		return retfunc(addr)
+	else:
+		return retfunc(addr, size)
 
 # Currently mapped internal functions.
 _funcs = {
@@ -82,13 +101,32 @@ CMD_FOR = 41
 CMD_IF = 42
 CMD_REM = 43
 
+class envdata(Structure):
+	_fields_ = [
+		('data', c_wchar_p),
+		('size', c_uint),
+		('max', c_uint),
+	]
+
+class jump_entry(Structure):
+	_fields_ = [
+		('name', c_wchar_p),
+		('func', WINFUNCTYPE(c_int)),
+		('flags', WORD),
+		('msgno', ULONG),
+		('msgno2', ULONG),
+		('msgno3', ULONG)
+	]
+
 class ComSpec(object):
 	def __init__(self):
 		self._funcs_ = _funcs
-		self.echo_flag = cast(_offset(0x4AD2408C), POINTER(BOOL))
-		# This is actually the jump table for some of the internal functions, but whatever. Haven't
-		# figured a way to implement this in ctypes.
-		self.jump_table = cast(_offset(0x4AD25880), POINTER(c_wchar_p))
+		self.echo_flag = InternalData(0x4AD2408C, restype=BOOL)
+		# Table of internal functions that expect a parse node as their one
+		# and only argument. Unfortunately, I haven't figured out much about
+		# the struct of the parse node, other than the fact that it has a
+		# wchar* offset 60 bytes from its
+		self.jump_table = InternalData(0x4AD25880, restype=jump_entry)
 		self.cd = self.chdir
 
 	def __getattr__(self, item):
@@ -101,7 +139,7 @@ class ComSpec(object):
 		if self._funcs_.has_key(item):
 			return self._funcs_[item]
 		elif type(item) in [ int, long, c_long, c_int8, c_int16, c_int32, c_int64]:
-			return cast(_offset(item), c_void_p)
+			return cast(mem_offset(item), c_void_p)
 		else:
 			#noinspection PyUnresolvedReferences
 			return super(ComSpec, self).__getitem__(item)

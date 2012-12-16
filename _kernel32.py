@@ -1,6 +1,6 @@
 from ctypes import *
 from ctypes.wintypes import *
-import _ctypes
+import _ctypes, sys
 
 
 #############
@@ -8,11 +8,9 @@ import _ctypes
 #############
 
 kernel32 = WinDLL('kernel32.dll')
-_isx64 = sizeof(c_void_p) == sizeof(c_ulonglong)
+is_x64 = sizeof(c_void_p) == sizeof(c_ulonglong)
+is_pypy = hasattr(sys, 'pypy_version_info')
 
-def is_x64():
-	global _isx64
-	return _isx64
 
 # ToolhelpSnapshot flags
 TH32CS_SNAPPROCESS = 0x00000002
@@ -50,9 +48,9 @@ LPTHREAD_START_ROUTINE = WINFUNCTYPE(DWORD, LPVOID)
 PWORD = POINTER(WORD)
 PDWORD = POINTER(DWORD)
 PHMODULE = POINTER(HMODULE)
-LONG_PTR = c_longlong if _isx64 else LONG
-ULONG_PTR = c_ulonglong if _isx64 else DWORD
-UINT_PTR = c_ulonglong if _isx64 else c_uint
+LONG_PTR = c_longlong if is_x64 else LONG
+ULONG_PTR = c_ulonglong if is_x64 else DWORD
+UINT_PTR = c_ulonglong if is_x64 else c_uint
 SIZE_T = ULONG_PTR
 POINTER_TYPE = ULONG_PTR
 LP_POINTER_TYPE = POINTER(POINTER_TYPE)
@@ -355,19 +353,32 @@ EnumProcessModulesEx.argtypes = EnumProcessModules.argtypes + [ DWORD ]
 EnumProcessModules.__doc__ = """ Retrieves a handle for each module in the specified process. """
 EnumProcessModulesEx.__doc__ = """ Retrieves a handle for each module in the specified process that meets the specified filter criteria. """
 
-GetCurrentProcess = kernel32.GetCurrentProcess
-GetCurrentProcess.restype = HANDLE
-GetCurrentProcess.argtypes = [ ]
-GetCurrentProcess.__doc__ = """ Retrieves a pseudo handle for the current process. """
+_GetCurrentProcess = kernel32.GetCurrentProcess
+_GetCurrentProcess.restype = HANDLE
+_GetCurrentProcess.argtypes = [ ]
 
 _ReadProcessMemory = kernel32.ReadProcessMemory
 _ReadProcessMemory.restype = BOOL
 _ReadProcessMemory.argtypes = [ HANDLE, LPCVOID, LPVOID, SIZE_T, POINTER(SIZE_T) ]
 
+_currproc = _GetCurrentProcess()
+def GetCurrentProcess():
+	""" Retrieves a pseudo handle for the current process. """
+	global _currproc
+	return _currproc
+
+_procbase = GetModuleHandleA(cast(NULL, c_char_p))
+def GetModuleHandle():
+	global _procbase
+	return _procbase
+
 def ReadProcessMemory(size, base = None, handle = None):
-	if handle is None: handle = GetCurrentProcess()
-	if base is None: base = handle
-	elif type(base) != c_void_p: base = cast(base, c_void_p)
+	if handle is None:
+		handle = GetCurrentProcess()
+	if base is None:
+		base = GetModuleHandle()
+	elif type(base) != c_void_p:
+		base = cast(base, c_void_p)
 	buff = (c_ubyte * size)()
 	sz = SIZE_T(size)
 	if not bool(_ReadProcessMemory(handle, base, cast(buff, LPVOID), sz, byref(sz) )):
@@ -377,8 +388,9 @@ def ReadProcessMemory(size, base = None, handle = None):
 		resize(buff, sz.value)
 	except:
 		pass
-	buff.size = sz.value
-	return buff
+	result = string_at(buff, sz.value)
+	del buff, sz
+	return result
 
 ReadProcessMemory.__doc__ = """ Reads data from an area of memory in a specified process. The entire area to be read must be accessible or the operation fails. """
 
